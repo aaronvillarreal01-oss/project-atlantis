@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from project_atlantis.core.models import (
+from examples.intake.project_atlantis.core.models import (
     Invoice,
     InvoiceLine,
     InvoiceTotals,
