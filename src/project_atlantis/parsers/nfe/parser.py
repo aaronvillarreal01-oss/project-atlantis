@@ -4,7 +4,12 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from project_atlantis.core.enums import InvoiceFormat
-from project_atlantis.core.models import Invoice, InvoiceTotals, Party
+from project_atlantis.core.models import (
+    Invoice,
+    InvoiceLine,
+    InvoiceTotals,
+    Party,
+)
 from project_atlantis.parsers.base import BaseParser
 
 
@@ -64,6 +69,7 @@ class NFeParser(BaseParser):
         )
 
         totals = self._parse_totals(root)
+        lines = self._parse_lines(root)
 
         return Invoice(
             invoice_number=invoice_number,
@@ -71,12 +77,16 @@ class NFeParser(BaseParser):
             currency_code="BRL",
             supplier=supplier,
             customer=customer,
+            lines=lines,
             totals=totals,
             source_format=InvoiceFormat.NFE,
         )
 
     @staticmethod
-    def _required_text(root: ET.Element, xpath: str) -> str:
+    def _required_text(
+        root: ET.Element,
+        xpath: str,
+    ) -> str:
         element = root.find(xpath, NS)
 
         if element is None or not element.text or not element.text.strip():
@@ -85,6 +95,26 @@ class NFeParser(BaseParser):
             )
 
         return element.text.strip()
+
+    @staticmethod
+    def _optional_text(
+        root: ET.Element,
+        xpath: str,
+    ) -> str | None:
+        element = root.find(xpath, NS)
+
+        if element is None:
+            return None
+
+        if element.text is None:
+            return None
+
+        value = element.text.strip()
+
+        if value == "":
+            return None
+
+        return value
 
     def _party_tax_id(
         self,
@@ -116,8 +146,6 @@ class NFeParser(BaseParser):
         self,
         root: ET.Element,
     ) -> date | None:
-        # NF-e 4.00 normally uses dhEmi.
-        # Older documents may use dEmi.
         date_xpaths = (
             ".//nfe:ide/nfe:dhEmi",
             ".//nfe:ide/nfe:dEmi",
@@ -164,6 +192,41 @@ class NFeParser(BaseParser):
             tax_total=tax_total,
             grand_total=grand_total,
         )
+
+    def _parse_lines(
+        self,
+        root: ET.Element,
+    ) -> list[InvoiceLine]:
+        lines: list[InvoiceLine] = []
+
+        for det in root.findall(".//nfe:det", NS):
+            line = InvoiceLine(
+                line_number=det.attrib.get("nItem", ""),
+                description=self._required_text(
+                    det,
+                    ".//nfe:prod/nfe:xProd",
+                ),
+                quantity=self._required_decimal(
+                    det,
+                    ".//nfe:prod/nfe:qCom",
+                ),
+                unit_price=self._required_decimal(
+                    det,
+                    ".//nfe:prod/nfe:vUnCom",
+                ),
+                line_total=self._required_decimal(
+                    det,
+                    ".//nfe:prod/nfe:vProd",
+                ),
+                product_classification=self._optional_text(
+                    det,
+                    ".//nfe:prod/nfe:NCM",
+                ),
+            )
+
+            lines.append(line)
+
+        return lines
 
     @staticmethod
     def _required_decimal(

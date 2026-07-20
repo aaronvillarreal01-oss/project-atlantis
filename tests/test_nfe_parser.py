@@ -25,6 +25,17 @@ VALID_NFE_XML = """<?xml version="1.0" encoding="UTF-8"?>
             <CPF>12345678901</CPF>
             <xNome>Customer Example</xNome>
         </dest>
+
+        <det nItem="1">
+            <prod>
+                <xProd>Industrial Valve</xProd>
+                <NCM>84818099</NCM>
+                <qCom>2.00</qCom>
+                <vUnCom>500.00</vUnCom>
+                <vProd>1000.00</vProd>
+            </prod>
+        </det>
+
         <total>
             <ICMSTot>
                 <vProd>1000.00</vProd>
@@ -54,7 +65,6 @@ def test_nfe_parser_creates_canonical_invoice(tmp_path: Path):
     assert invoice.customer.tax_id == "12345678901"
     assert invoice.customer.country_code == "BR"
 
-    assert invoice.lines == []
     assert invoice.totals is not None
     assert invoice.totals.subtotal == Decimal("1000.00")
     assert invoice.totals.tax_total == Decimal("180.00")
@@ -67,6 +77,16 @@ def test_nfe_parser_creates_canonical_invoice(tmp_path: Path):
     assert invoice.totals.tax_total == Decimal("180.00")
     assert invoice.totals.grand_total == Decimal("1180.00")
 
+    assert len(invoice.lines) == 1
+
+    line = invoice.lines[0]
+
+    assert line.line_number == "1"
+    assert line.description == "Industrial Valve"
+    assert line.quantity == Decimal("2.00")
+    assert line.unit_price == Decimal("500.00")
+    assert line.line_total == Decimal("1000.00")
+    assert line.product_classification == "84818099"
 
 def test_nfe_parser_rejects_missing_invoice_number(tmp_path: Path):
     invalid_xml = VALID_NFE_XML.replace(
