@@ -9,6 +9,7 @@ from project_atlantis.core.models import (
     InvoiceLine,
     InvoiceTotals,
     Party,
+    Tax,
 )
 from project_atlantis.parsers.base import BaseParser
 
@@ -222,11 +223,55 @@ class NFeParser(BaseParser):
                     det,
                     ".//nfe:prod/nfe:NCM",
                 ),
+                taxes=self._parse_line_taxes(det),
             )
 
             lines.append(line)
 
         return lines
+
+    def _parse_line_taxes(
+        self,
+        det: ET.Element,
+    ) -> list[Tax]:
+        taxes: list[Tax] = []
+
+        icms_parent = det.find(".//nfe:imposto/nfe:ICMS", NS)
+
+        if icms_parent is None:
+            return taxes
+
+        icms_regime = next(iter(icms_parent), None)
+
+        if icms_regime is None:
+            return taxes
+
+        taxable_amount = self._optional_decimal(
+            icms_regime,
+            "nfe:vBC",
+        )
+        tax_rate = self._optional_decimal(
+            icms_regime,
+            "nfe:pICMS",
+        )
+        tax_amount = self._optional_decimal(
+            icms_regime,
+            "nfe:vICMS",
+        )
+
+        if tax_amount is None:
+            tax_amount = Decimal("0.00")
+
+        taxes.append(
+            Tax(
+                tax_type="ICMS",
+                tax_rate=tax_rate,
+                taxable_amount=taxable_amount,
+                tax_amount=tax_amount,
+            )
+        )
+
+        return taxes
 
     @staticmethod
     def _required_decimal(
@@ -247,4 +292,26 @@ class NFeParser(BaseParser):
         except InvalidOperation as exc:
             raise NFeParsingError(
                 f"Invalid NF-e monetary amount at {xpath}: {value}"
+            ) from exc
+    
+    @staticmethod
+    def _optional_decimal(
+        root: ET.Element,
+        xpath: str,
+    ) -> Decimal | None:
+        element = root.find(xpath, NS)
+
+        if element is None or element.text is None:
+            return None
+
+        value = element.text.strip()
+
+        if value == "":
+            return None
+
+        try:
+            return Decimal(value)
+        except InvalidOperation as exc:
+            raise NFeParsingError(
+                f"Invalid NF-e decimal amount at {xpath}: {value}"
             ) from exc

@@ -34,6 +34,19 @@ VALID_NFE_XML = """<?xml version="1.0" encoding="UTF-8"?>
                 <vUnCom>500.00</vUnCom>
                 <vProd>1000.00</vProd>
             </prod>
+            
+            <imposto>
+                <ICMS>
+                    <ICMS00>
+                        <orig>0</orig>
+                        <CST>00</CST>
+                        <modBC>3</modBC>
+                        <vBC>1000.00</vBC>
+                        <pICMS>18.00</pICMS>
+                        <vICMS>180.00</vICMS>
+                    </ICMS00>
+                </ICMS>
+            </imposto>
         </det>
 
         <total>
@@ -87,6 +100,15 @@ def test_nfe_parser_creates_canonical_invoice(tmp_path: Path):
     assert line.unit_price == Decimal("500.00")
     assert line.line_total == Decimal("1000.00")
     assert line.product_classification == "84818099"
+
+    assert len(line.taxes) == 1
+
+    icms = line.taxes[0]
+
+    assert icms.tax_type == "ICMS"
+    assert icms.taxable_amount == Decimal("1000.00")
+    assert icms.tax_rate == Decimal("18.00")
+    assert icms.tax_amount == Decimal("180.00")
 
 def test_nfe_parser_rejects_missing_invoice_number(tmp_path: Path):
     invalid_xml = VALID_NFE_XML.replace(
