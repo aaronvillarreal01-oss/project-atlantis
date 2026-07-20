@@ -1,5 +1,6 @@
 from datetime import date
 from pathlib import Path
+from decimal import Decimal
 
 import pytest
 
@@ -24,6 +25,12 @@ VALID_NFE_XML = """<?xml version="1.0" encoding="UTF-8"?>
             <CPF>12345678901</CPF>
             <xNome>Customer Example</xNome>
         </dest>
+        <total>
+            <ICMSTot>
+                <vProd>1000.00</vProd>
+                <vNF>1180.00</vNF>
+            </ICMSTot>
+        </total>
     </infNFe>
 </NFe>
 """
@@ -48,8 +55,17 @@ def test_nfe_parser_creates_canonical_invoice(tmp_path: Path):
     assert invoice.customer.country_code == "BR"
 
     assert invoice.lines == []
-    assert invoice.totals is None
+    assert invoice.totals is not None
+    assert invoice.totals.subtotal == Decimal("1000.00")
+    assert invoice.totals.tax_total == Decimal("180.00")
+    assert invoice.totals.grand_total == Decimal("1180.00")
+
     assert invoice.source_format == InvoiceFormat.NFE
+
+    assert invoice.totals is not None
+    assert invoice.totals.subtotal == Decimal("1000.00")
+    assert invoice.totals.tax_total == Decimal("180.00")
+    assert invoice.totals.grand_total == Decimal("1180.00")
 
 
 def test_nfe_parser_rejects_missing_invoice_number(tmp_path: Path):
